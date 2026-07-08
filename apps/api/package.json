@@ -9,12 +9,18 @@
     "start": "node dist/server.js",
     "lint": "dotenv -e .env.example -- prisma generate && eslint src",
     "typecheck": "dotenv -e .env.example -- prisma generate && tsc -p tsconfig.json --noEmit",
-    "test": "dotenv -e .env.test -- prisma generate && dotenv -e .env.test -- prisma db push --skip-generate --accept-data-loss && dotenv -e .env.test -- vitest run"
+    "test": "dotenv -e .env.test -- prisma generate && dotenv -e .env.test -- prisma db push --skip-generate --accept-data-loss && dotenv -e .env.test -- vitest run",
+    "db:seed": "dotenv -e .env -- prisma db seed",
+    "db:reset": "dotenv -e .env -- prisma db push --force-reset --accept-data-loss && dotenv -e .env -- prisma db seed"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
     "@aws-sdk/s3-request-presigner": "^3.1075.0",
     "@prisma/client": "^6.5.0",
+    "@sentry/node": "^8",
     "@universal-healthcare/shared": "workspace:*",
     "bcryptjs": "^2.4.3",
     "compression": "^1.8.1",
