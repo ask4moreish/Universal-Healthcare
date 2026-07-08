@@ -1,0 +1,50 @@
+# lefthook.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Universal Healthcare Data Network — pre-push hooks.
+#
+# Auto-installed by the `prepare` script in the root package.json, so every
+# contributor gets these wired up on their first `pnpm install`. Sequential by
+# design: the Git LFS check runs first (preserves the legacy
+# .git/hooks/pre-push behavior the repo had before this config), then the local
+# CI suite runs and blocks the push if anything is red.
+#
+# Bypass for emergencies: `git push --no-verify`. Documented in
+# docs/contributing.md.
+#
+# Follow-ups to consider when this file grows:
+#   - pre-commit:  run lint on staged files only (fast, < 5s) so red commits
+#                  never even land locally
+#   - commit-msg:  enforce Conventional Commits regex on the subject line
+# ─────────────────────────────────────────────────────────────────────────────
+
+pre-push:
+  # Sequential, not parallel: the LFS check should fail fast and the CI check
+  # shouldn't start if LFS already blocked the push.
+  parallel: false
+
+  commands:
+    git-lfs:
+      # Preserves the original .git/hooks/pre-push behavior. The repo doesn't
+      # currently use LFS (no .gitattributes with `* filter=lfs`), but the check
+      # is preserved verbatim so a future .gitattributes LFS filter doesn't
+      # silently fail. Same exit code (2) + same error message as before.
+      #
+      # CRITICAL: lefthook exposes Git's hook positional args (remote name +
+      # URL) as the template variables {1} and {2}, NOT as $@. Inline `run:`
+      # scripts execute in a subshell with no positional args, so "$@" would
+      # be empty and `git lfs pre-push` would have nothing to proxy.
+      run: |
+        if command -v git-lfs >/dev/null 2>&1; then
+          git lfs pre-push {1} {2}
+        else
+          printf >&2 "\n%s\n\n" "This repository is configured for Git LFS but 'git-lfs' was not found on your path. If you no longer wish to use Git LFS, remove this hook by deleting the 'pre-push' file in the hooks directory (set by 'core.hookspath'; usually '.git/hooks')."
+          exit 2
+        fi
+
+    ci-local:
+      # Mirrors the GitHub Actions workflows for the packages most likely to be
+      # affected (api + web + shared). ~1 min on a warm cache. Skips the docker
+      # build (step 7) so the hook is fast enough to run on every push; the
+      # full docker build is still covered by `tools/ci-local.sh` (no flag)
+      # which the contributor can run manually before a release PR.
+      run: tools/ci-local.sh --quick --no-docker

@@ -55,8 +55,23 @@ If a `pnpm lint` or `pnpm typecheck` warning appears for code you didn't touch, 
 2. **Run `pnpm install`** if `pnpm-lock.yaml` changed or you switched branches.
 3. **Copy env files** ([Environment](./environment.md)) for the apps you'll exercise.
 4. **Make scoped changes.** Extend an existing module / package rather than creating a new top-level layer unless the new layer is justified.
-5. **Run `tools/ci-local.sh --quick`** before pushing — mirrors the CI workflows for the packages most likely to be affected (api + web + shared, ~1 min). For a full pre-push check including docker, use `tools/ci-local.sh` with no flag (~3 min). The script is a faithful local reproduction of the 7 GitHub Actions workflows: it runs `pnpm install --frozen-lockfile`, then the same turbo / docs / docker commands each workflow runs, with proper exit-code capture (`set -o pipefail`) and a per-step pass/fail summary.
+5. **The pre-push hook runs `tools/ci-local.sh --quick --no-docker` automatically** on every `git push` — you don't need to remember to run it. The hook is installed by `lefthook` (auto-installed by `pnpm install` via the `prepare` script), configured in `lefthook.yml`, and runs sequentially: the Git LFS check first (preserves the legacy behavior the repo had), then the local CI suite (api + web + shared, ~1 min on a warm cache). If the hook blocks your push, run `tools/ci-local.sh --quick` locally to see the failure, fix it, and re-push. For a full pre-push check including docker, use `tools/ci-local.sh` with no flag (~3 min) — the hook skips docker so it stays fast. **Bypass for emergencies only:** `git push --no-verify`.
 6. **Open a PR against `main`.** Target branch is `main`. PRs auto-trigger the workflow(s) for the packages you touched and any package that depends on them.
+
+---
+
+## Pre-push hook
+
+A `lefthook`-managed `pre-push` git hook is installed automatically when you run `pnpm install` (the root `package.json` `prepare` script calls `lefthook install`). The config lives in `lefthook.yml` at the repo root.
+
+What it does, in order:
+
+1. **Git LFS check** — preserves the legacy `.git/hooks/pre-push` behavior. The repo doesn't currently use LFS (no `.gitattributes` with `* filter=lfs`), but the check is preserved so a future LFS filter doesn't silently fail. Errors with exit code 2 if `git-lfs` is not on your `PATH`.
+2. **Local CI suite** — runs `tools/ci-local.sh --quick --no-docker`. Mirrors the GitHub Actions workflows for the most-touched packages (api + web + shared). ~1 min on a warm cache. Skips the docker build (step 7) so the hook stays fast enough to run on every push.
+
+If the hook blocks your push, the output names which step failed — run that step's command manually to see the details, fix the underlying issue, and re-push.
+
+**Bypass for emergencies only:** `git push --no-verify`. Use this when you have a specific, documented reason (e.g., a broken main that you need to push a hotfix past). The hook re-fires on the next push unless the underlying issue is fixed.
 
 ---
 
@@ -66,7 +81,7 @@ A PR is review-ready when every box here is true:
 
 - [ ] **Scoped** — one logical change, named clearly in the title and PR body
 - [ ] **Tests** — `vitest` / `jest` coverage for any new or changed behaviour
-- [ ] **`tools/ci-local.sh --quick`** — clean locally for affected packages (or `pnpm check` for faster iterative feedback)
+- [ ] **Pre-push hook passed** — `git push` ran the lefthook-managed pre-push hook (LFS check + `tools/ci-local.sh --quick --no-docker`) and reported green; bypassed via `git push --no-verify` only if you have a documented reason
 - [ ] **Shared schemas** — any cross-app shape lives in `@universal-healthcare/shared`
 - [ ] **No new `.env`** — only `.env.example` updates are committed
 - [ ] **No generated artefacts** — `dist/`, `.next/`, `.expo/`, `*.db` are gitignored

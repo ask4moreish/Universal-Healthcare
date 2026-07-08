@@ -11,6 +11,7 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prepare": "[ -d .git ] && lefthook install || true",
     "dev": "turbo run dev --parallel",
     "dev:api": "pnpm --filter @universal-healthcare/api dev",
     "dev:web": "pnpm --filter @universal-healthcare/web dev",
@@ -20,6 +21,7 @@
     "@eslint/js": "^9.23.0",
     "eslint": "^9.23.0",
     "globals": "^16.0.0",
+    "lefthook": "^2.1.10",
     "prettier": "^3.5.3",
     "turbo": "^2.5.0",
     "typescript": "^5.8.2",
@@ -32,7 +34,8 @@
       "esbuild",
       "prisma",
       "@sentry/cli",
-      "sharp"
+      "sharp",
+      "lefthook"
     ]
   }
 }
