@@ -424,11 +424,8 @@ Don't commit `.env`, secrets, or generated artifacts (`dist/`, `.next/`, `.expo/
 
 ## Roadmap
 
-UHDN is at the foundation stage. The current gaps — each pre-scaffolded and waiting on top of the existing primitives:
+UHDN ships production-grade auth (register, login, refresh-token rotation, password reset, email verification, role-based activation) and profile management. The next priorities — each pre-scaffolded and building on the existing primitives:
 
-- **Activation flow** – today registration creates a `User`; the next iteration creates a `CreatorProfile` / `FanProfile` based on chosen role.
-- **Refresh-token rotation** – currently 1h access JWTs with no rotation. Will add a refresh-token table + rotation + revocation.
-- **Password reset & email verification** – self-serve flows with signed email links.
 - **Real Stellar integration** – flesh out `packages/stellar` with a Horizon client and reconciliation flows for data provenance.
 - **Patient / provider / payer scopes** – additional tables and DTOs sharing the existing module pattern.
 - **OAuth / SSO** – Google, Apple, Microsoft Entra for clinician identity.
