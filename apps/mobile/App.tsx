@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar'
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { AuthProvider, useAuth } from './src/hooks/useAuth'
 import LoginScreen from './src/screens/LoginScreen'
 import RegisterScreen from './src/screens/RegisterScreen'
@@ -61,7 +61,15 @@ function HomeScreen() {
 }
 
 function RootNavigator() {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <View style={styles.splashContainer}>
+        <ActivityIndicator size='large' color='#1976d2' />
+      </View>
+    )
+  }
 
   if (user) {
     return <HomeScreen />
@@ -127,5 +135,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  splashContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })
