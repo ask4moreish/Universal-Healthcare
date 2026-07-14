@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from 'express'
 import { z } from 'zod'
 import { paginationSchema } from '@universal-healthcare/shared'
 import { AppError } from '../../../shared/errors/app-error.js'
+import { envelope } from '../../../shared/pagination/format.js'
 import { commentService } from '../services/comment.service.js'
 import {
   createCommentSchema,
@@ -38,17 +39,9 @@ export const commentController = {
         page,
         pageSize
       )
-      const totalPages = Math.max(1, Math.ceil(total / pageSize))
       res.status(200).json({
         data: items.map(toCommentResponse),
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages,
-          hasNext: page < totalPages,
-          hasPrev: page > 1,
-        },
+        pagination: envelope(page, pageSize, total),
       })
     } catch (err) {
       next(err)

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import { paginationSchema } from '@universal-healthcare/shared'
 import { AppError } from '../../../shared/errors/app-error.js'
+import { envelope } from '../../../shared/pagination/format.js'
 import { notificationService } from '../services/notification.service.js'
 import { toNotificationResponse } from '../types/notification.types.js'
 import { notificationIdParamSchema } from '../validators/notification.validators.js'
@@ -11,18 +12,6 @@ function userIdOrThrow(req: Request): string {
     throw new AppError(401, 'UNAUTHENTICATED', 'Authentication required')
   }
   return id
-}
-
-function envelope(page: number, pageSize: number, total: number) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  return {
-    page,
-    pageSize,
-    total,
-    totalPages,
-    hasNext: page < totalPages,
-    hasPrev: page > 1,
-  }
 }
 
 export const notificationController = {
