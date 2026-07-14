@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { AppError } from '../../../shared/errors/app-error.js'
+import { notificationService } from '../../notifications/services/notification.service.js'
 import {
   followRepository,
   FOLLOW_UNIQUE_VIOLATION,
@@ -31,8 +32,9 @@ export const followService = {
       throw new AppError(404, 'USER_NOT_FOUND', 'User not found')
     }
 
+    let follow: Follow
     try {
-      return await followRepository.create({
+      follow = await followRepository.create({
         followerId: requestingUserId,
         followeeId,
       })
@@ -51,6 +53,28 @@ export const followService = {
       }
       throw err
     }
+
+    // ─── Side-effect: emit a 'follow' notification to the followee ──────
+    // Sequential emission, NOT a cross-service $transaction (§2 in
+    // docs/decisions/0001-modular-monolith.md: all DB writes go through the
+    // repository, and the codebase has no event bus in v1). Wrapped in
+    // try/catch so a notification failure does NOT roll back the core follow.
+    // Same pattern as `auth.service.register` calling
+    // `emailVerificationService.issueAndSend` — peripheral side-effects
+    // never block the main operation.
+    try {
+      await notificationService.emit({
+        recipientId: followeeId,
+        actorId: requestingUserId,
+        type: 'follow',
+        entityType: 'follow',
+        entityId: follow.id,
+      })
+    } catch (err) {
+      void err
+    }
+
+    return follow
   },
 
   async delete(followeeId: string, requestingUserId: string): Promise<void> {

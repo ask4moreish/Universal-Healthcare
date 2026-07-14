@@ -1,4 +1,5 @@
 import { AppError } from '../../../shared/errors/app-error.js'
+import { notificationService } from '../../notifications/services/notification.service.js'
 import { playlistRepository } from '../../playlists/repositories/playlist.repository.js'
 import { commentRepository } from '../repositories/comment.repository.js'
 import type {
@@ -44,8 +45,11 @@ export const commentService = {
     if (!playlist || !playlist.isPublic) {
       throw new AppError(404, 'PLAYLIST_NOT_FOUND', 'Playlist not found')
     }
+    // Resolve the parent once if there is one — the body uses `parent` again
+    // for the notification side-effect below, so we hold a reference to it.
+    let parent: Comment | null = null
     if (payload.parentId) {
-      const parent = await commentRepository.findById(payload.parentId)
+      parent = await commentRepository.findById(payload.parentId)
       if (!parent || parent.playlistId !== payload.playlistId) {
         throw new AppError(
           400,
@@ -54,12 +58,33 @@ export const commentService = {
         )
       }
     }
-    return commentRepository.create({
+
+    const comment = await commentRepository.create({
       userId: requestingUserId,
       playlistId: payload.playlistId,
       parentId: payload.parentId,
       body: payload.body,
     })
+
+    // ─── Side-effect: emit a 'comment_reply' notification ──────────────
+    // Only on REPLIES (not top-level comments), and only when the reply is
+    // from a different user (no self-reply ping). Same pattern as Follows:
+    // sequential emit, NOT cross-service $transaction, NOT blocking on failure.
+    if (parent && parent.userId !== requestingUserId) {
+      try {
+        await notificationService.emit({
+          recipientId: parent.userId,
+          actorId: requestingUserId,
+          type: 'comment_reply',
+          entityType: 'comment',
+          entityId: comment.id,
+        })
+      } catch (err) {
+        void err
+      }
+    }
+
+    return comment
   },
 
   async getById(id: string): Promise<Comment> {
