@@ -3,8 +3,10 @@ import compression from 'compression'
 import cors from 'cors'
 import helmet from 'helmet'
 import { authRouter } from './modules/auth/routes/auth.routes.js'
+import { commentRouter } from './modules/comments/routes/comment.routes.js'
 import { creatorsRouter } from './modules/creators/routes/creator.routes.js'
 import { fansRouter } from './modules/fans/routes/fan.routes.js'
+import { playlistsRouter } from './modules/playlists/routes/playlist.routes.js'
 import { usersRouter } from './modules/users/routes/user.routes.js'
 import { env } from './shared/config/env.js'
 import { prisma } from './shared/database/prisma.js'
@@ -98,8 +100,10 @@ export function createApp(): Express {
   // 6. API routes — all under /api, with rate limiting.
   app.use('/api', apiRateLimiter)
   app.use('/api/auth', authRouter)
+  app.use('/api/comments', commentRouter)
   app.use('/api/creators', creatorsRouter)
   app.use('/api/fans', fansRouter)
+  app.use('/api/playlists', playlistsRouter)
   app.use('/api/users', usersRouter)
 
   // 7. Error handler must be last.
