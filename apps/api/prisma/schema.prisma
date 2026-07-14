@@ -24,6 +24,47 @@ model User {
   comments              Comment[]
   followedBy            Follow[]   @relation("FollowFollower")
   following             Follow[]   @relation("FollowFollowee")
+  recipientNotifications Notification[] @relation("NotificationRecipient")
+  actorNotifications    Notification[] @relation("NotificationActor")
+}
+
+// Notifications: a user receives one when others follow them or reply to
+// their comments.
+//
+// Asymmetric delete behavior on purpose:
+//   recipient -> Cascade : the recipient's account is gone, so any
+//                         notification they haven't read has no audience.
+//   actor     -> SetNull  : the actor's account can disappear without
+//                         nuking the recipient's notification history. The
+//                         notification row stays, becoming system-attributed
+//                         (`actorId: null`); the `type` + `entityType` +
+//                         `entityId` still say WHAT happened, just not
+//                         by whom.
+//
+// Note: SQLite requires `PRAGMA foreign_keys = ON` for these ON DELETE
+// rules to fire at runtime; Prisma enables it by default for the standard
+// client. If a future contributor configures a custom Prisma client (say
+// for a benchmark or k6 load test) and disables the pragma, the schema's
+// stated behavior will silently diverge from what
+// `notification.service.test.ts` `delete semantics` tests expect.
+model Notification {
+  id           String   @id @default(cuid())
+  recipientId  String
+  actorId      String?
+  recipient    User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor        User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  type         String
+  entityType   String
+  entityId     String
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Composite supports the inbox query: WHERE recipientId = ? AND read = ?
+  // ORDER BY createdAt DESC. SQLite uses the leading column for equality; the
+  // boolean filter narrows further; the index serves the ORDER BY (descending
+  // read on an ascending index is a reverse scan — fine).
+  @@index([recipientId, read, createdAt])
 }
 
 // Follows: a user-to-user one-way relationship. Each row represents
