@@ -5,8 +5,9 @@ import helmet from 'helmet'
 import { authRouter } from './modules/auth/routes/auth.routes.js'
 import { commentRouter } from './modules/comments/routes/comment.routes.js'
 import { creatorsRouter } from './modules/creators/routes/creator.routes.js'
-import { followRouter } from './modules/follows/routes/follow.routes.js'
 import { fansRouter } from './modules/fans/routes/fan.routes.js'
+import { followRouter } from './modules/follows/routes/follow.routes.js'
+import { notificationRouter } from './modules/notifications/routes/notification.routes.js'
 import { playlistsRouter } from './modules/playlists/routes/playlist.routes.js'
 import { usersRouter } from './modules/users/routes/user.routes.js'
 import { env } from './shared/config/env.js'
@@ -105,6 +106,7 @@ export function createApp(): Express {
   app.use('/api/creators', creatorsRouter)
   app.use('/api/follows', followRouter)
   app.use('/api/fans', fansRouter)
+  app.use('/api/notifications', notificationRouter)
   app.use('/api/playlists', playlistsRouter)
   app.use('/api/users', usersRouter)
 
