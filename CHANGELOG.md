@@ -56,8 +56,7 @@ null`); the prisma schema comment documents both with a SQLite
   `$transaction`, and wrapped in `try { ... } catch (err) { void err }`
   so a notification failure does NOT roll back the main operation.
   Mirrors the `auth.service.register` →
-  `emailVerificationService.issueAndSend` pattern.
-- **Web + mobile clients for Comments, Follows, Notifications**. New
+  `emailVerificationService.issueAndSend` pattern.- **Web + mobile clients for Comments, Follows, Notifications**. New
   files: `apps/web/lib/comment-client.ts`,
   `apps/web/lib/follow-client.ts`,
   `apps/web/lib/notification-client.ts` — function-per-endpoint
@@ -77,6 +76,38 @@ error, refresh }`, and a sibling actions hook
   messages to the `error` state; callers are expected to invoke
   `refresh()` after mutations (no internal cross-hook state
   coupling — keeps the data layer orthogonal).
+- **Search module** (cross-entity full-text across creators +
+  public playlists + comments on public playlists). Public
+  endpoint `GET /api/search?q=…&page=&pageSize=&types=creator,playlist,comment&limit=`
+  — no `requireAuth` gate; privacy is enforced in the repository
+  layer via `isPublic: true` (playlists) and
+  `playlist: { isPublic: true }` (comments). Query parsing: split
+  on whitespace, AND each token against the entity's searchable
+  fields with Prisma's `contains: token`. Case sensitivity
+  follows the underlying DB: **case-INsensitive on SQLite**
+  (LIKE is case-insensitive for ASCII by default) and
+  **case-sensitive on Postgres** (LIKE without `mode: 'insensitive'`).
+  Prisma's `mode: 'insensitive'` is unsupported on SQLite in the
+  current project Prisma version, so we accept this cross-DB
+  inconsistency as a v1 limitation; v2 will normalize via raw
+  SQL `LOWER(col) LIKE LOWER(?)` or a Prisma version upgrade.
+  Scoring is JS-side and deterministic: `+10` exact match on
+  `displayName`/`title`/`body`, `+5` prefix, `+1` substring,
+  plus `+1` per token for `bio` matches (creators). Hits are
+  sorted by `score desc, createdAt desc`, then sliced to the
+  requested page. Response is a flat
+  `{ data: SearchHitResponse[], pagination }` envelope where each
+  hit carries a `type: 'creator' | 'playlist' | 'comment'`
+  discriminator (discriminated union in shared types) so web /
+  mobile clients can `switch (hit.type)` with strict typing. New
+  files: `packages/shared/src/types/search.ts`,
+  `packages/shared/src/validation/search.ts`,
+  `apps/api/src/modules/search/{services,controllers,routes,types,tests,index}.ts`,
+  `apps/web/lib/search-client.ts`,
+  `apps/mobile/src/hooks/useSearch.ts`. Repository additions:
+  `creatorRepository.search` + `countSearch`,
+  `playlistRepository.searchPublic` + `countPublicSearch`,
+  `commentRepository.searchPublic` + `countPublicSearch`.
 
 ### Changed
 
