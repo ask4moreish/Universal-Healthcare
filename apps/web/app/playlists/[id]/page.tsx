@@ -1,9 +1,15 @@
 'use client'
 
-import type { PlaylistResponse, TrackResponse } from '@universal-healthcare/shared'
+import type { CreateTrackInput, PlaylistResponse, TrackResponse } from '@universal-healthcare/shared'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { useAuth } from '../../../lib/auth-context'
 import {
   deletePlaylist,
@@ -26,9 +32,20 @@ function formatDuration(seconds: number): string {
 interface TrackRowProps {
   track: TrackResponse
   position: number
+  onRemove?: (id: string) => void
+  editing?: boolean
+  removing?: boolean
+  anyRemoving?: boolean
 }
 
-function TrackRow({ track, position }: TrackRowProps) {
+function TrackRow({
+  track,
+  position,
+  onRemove,
+  editing,
+  removing,
+  anyRemoving,
+}: TrackRowProps) {
   return (
     <tr
       style={{
@@ -77,13 +94,58 @@ function TrackRow({ track, position }: TrackRowProps) {
       >
         {formatDuration(track.duration)}
       </td>
+      {editing && onRemove && (
+        <td
+          style={{
+            padding: '0.625rem 0.5rem',
+            textAlign: 'center',
+            width: '2.5rem',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => onRemove?.(track.id)}
+            disabled={removing || anyRemoving}
+            style={{
+              width: '1.75rem',
+              height: '1.75rem',
+              borderRadius: '50%',
+              border: 'none',
+              background: (removing || anyRemoving)
+                ? 'transparent'
+                : '#fef2f2',
+              color: '#b00020',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: (removing || anyRemoving) ? 'not-allowed' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: (removing || anyRemoving) ? 0.5 : 1,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              if (!removing && !anyRemoving)
+                (e.currentTarget.style.background = '#fecaca')
+            }}
+            onMouseLeave={(e) => {
+              if (!removing && !anyRemoving)
+                (e.currentTarget.style.background = '#fef2f2')
+            }}
+            aria-label={`Remove track ${track.title}`}
+          >
+            {removing ? '…' : '✕'}
+          </button>
+        </td>
+      )}
     </tr>
   )
 }
 
 export default function PlaylistDetailPage() {
-  const params = useParams<{ id: string }>()
   const router = useRouter()
+  const params = useParams<{ id: string }>()
+  const id = params?.id ?? null
   const { token } = useAuth()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [editing, setEditing] = useState(false)
@@ -95,11 +157,25 @@ export default function PlaylistDetailPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  // Track editing state
+  const [editingTracks, setEditingTracks] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newTrackTitle, setNewTrackTitle] = useState('')
+  const [newTrackArtist, setNewTrackArtist] = useState('')
+  const [newTrackDuration, setNewTrackDuration] = useState('')
+  const [savingTracks, setSavingTracks] = useState(false)
+  const [trackError, setTrackError] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+
   const load = useCallback(async () => {
+    if (!id) {
+      setState({ status: 'error', message: 'Playlist not found' })
+      return
+    }
     try {
       if (token) {
         try {
-          const result = await getMyPlaylist(token, params.id)
+          const result = await getMyPlaylist(token, id)
           setState({ status: 'ok', playlist: result.data })
           return
         } catch (err) {
@@ -107,34 +183,116 @@ export default function PlaylistDetailPage() {
           if (status !== 404) throw err
         }
       }
-      const result = await getPublicPlaylist(params.id)
+      const result = await getPublicPlaylist(id)
       setState({ status: 'ok', playlist: result.data })
     } catch {
       setState({ status: 'error', message: 'Playlist not found' })
     }
-  }, [params.id, token])
+  }, [id, token])
 
   useEffect(() => {
     load()
   }, [load])
 
-  const startEditing = useCallback(() => {
-    if (state.status !== 'ok') return
-    setEditTitle(state.playlist.title)
-    setEditIsPublic(state.playlist.isPublic)
-    setEditError(null)
-    setDeleteConfirm(false)
-    setEditing(true)
+  // Mirror state into a ref so callbacks can read the latest value without
+  // forcing themselves to be re-created on every setState.
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
   }, [state])
 
+  const startEditing = useCallback(() => {
+    const current = stateRef.current
+    if (current.status !== 'ok') return
+    setEditTitle(current.playlist.title)
+    setEditIsPublic(current.playlist.isPublic)
+    setEditError(null)
+    setDeleteConfirm(false)
+    setEditingTracks(false)
+    setShowAddForm(false)
+    setEditing(true)
+  }, [])
+
+  const startEditingTracks = useCallback(() => {
+    const current = stateRef.current
+    if (current.status !== 'ok') return
+    setTrackError(null)
+    setEditing(false)
+    setDeleteConfirm(false)
+    setShowAddForm(false)
+    setEditingTracks(true)
+  }, [])
+
+  const handleAddTrack = useCallback(async () => {
+    const current = stateRef.current
+    if (current.status !== 'ok' || !token || !id) return
+    const duration = parseInt(newTrackDuration, 10)
+    if (!newTrackTitle.trim() || !newTrackArtist.trim() || !duration) return
+    setSavingTracks(true)
+    setTrackError(null)
+    try {
+      const newTrack: CreateTrackInput = {
+        title: newTrackTitle.trim(),
+        artist: newTrackArtist.trim(),
+        duration,
+      }
+      const tracks: CreateTrackInput[] = [
+        ...current.playlist.tracks.map((t) => ({
+          title: t.title,
+          artist: t.artist,
+          duration: t.duration,
+        })),
+        newTrack,
+      ]
+      const result = await updatePlaylist(token, id, { tracks })
+      setState({ status: 'ok', playlist: result.data })
+      setNewTrackTitle('')
+      setNewTrackArtist('')
+      setNewTrackDuration('')
+      setShowAddForm(false)
+    } catch (err) {
+      setTrackError(
+        err instanceof Error ? err.message : 'Failed to add track'
+      )
+    } finally {
+      setSavingTracks(false)
+    }
+  }, [id, token, newTrackTitle, newTrackArtist, newTrackDuration])
+
+  const handleRemoveTrack = useCallback(
+    async (trackId: string) => {
+      const current = stateRef.current
+      if (current.status !== 'ok' || !token || !id) return
+      setRemovingId(trackId)
+      try {
+        const tracks: CreateTrackInput[] = current.playlist.tracks
+          .filter((t) => t.id !== trackId)
+          .map((t) => ({
+            title: t.title,
+            artist: t.artist,
+            duration: t.duration,
+          }))
+        const result = await updatePlaylist(token, id, { tracks })
+        setState({ status: 'ok', playlist: result.data })
+      } catch (err) {
+        setTrackError(
+          err instanceof Error ? err.message : 'Failed to remove track'
+        )
+      } finally {
+        setRemovingId(null)
+      }
+    },
+    [id, token]
+  )
+
   const handleSave = useCallback(
-    async (e: React.FormEvent) => {
+    async (e: FormEvent) => {
       e.preventDefault()
-      if (!token || !editTitle.trim()) return
+      if (!token || !id || !editTitle.trim()) return
       setSaving(true)
       setEditError(null)
       try {
-        const result = await updatePlaylist(token, params.id, {
+        const result = await updatePlaylist(token, id, {
           title: editTitle.trim(),
           isPublic: editIsPublic,
         })
@@ -148,15 +306,15 @@ export default function PlaylistDetailPage() {
         setSaving(false)
       }
     },
-    [token, params.id, editTitle, editIsPublic]
+    [token, id, editTitle, editIsPublic]
   )
 
   const handleDelete = useCallback(async () => {
-    if (!token) return
+    if (!token || !id) return
     setDeleting(true)
     setDeleteError(null)
     try {
-      await deletePlaylist(token, params.id)
+      await deletePlaylist(token, id)
       router.push('/playlists')
     } catch (err) {
       setDeleteError(
@@ -165,7 +323,7 @@ export default function PlaylistDetailPage() {
       setDeleting(false)
       setDeleteConfirm(false)
     }
-  }, [token, params.id, router])
+  }, [token, id, router])
 
   // ── Loading ─────────────────────────────────────────────────────────────
   if (state.status === 'loading') {
@@ -224,8 +382,34 @@ export default function PlaylistDetailPage() {
           ← Back to playlists
         </Link>
 
-        {token && !editing && (
+        {token && !editing && !editingTracks && (
           <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={startEditingTracks}
+              style={{
+                padding: '0.375rem 0.75rem',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                borderRadius: '0.5rem',
+                border: '1px solid var(--border, #d1d5db)',
+                background: 'transparent',
+                color: 'var(--muted, #6b7280)',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#2563eb'
+                e.currentTarget.style.color = '#2563eb'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor =
+                  'var(--border, #d1d5db)'
+                e.currentTarget.style.color = 'var(--muted, #6b7280)'
+              }}
+            >
+              Edit Tracks
+            </button>
             <button
               type="button"
               onClick={startEditing}
@@ -338,9 +522,228 @@ export default function PlaylistDetailPage() {
       </div>
 
       {deleteError && (
-        <p role="alert" style={{ marginBottom: '1rem' }}>
+        <p role="alert" style={{ color: '#b00020', marginBottom: '1rem', fontSize: '0.875rem' }}>
           {deleteError}
         </p>
+      )}
+
+      {trackError && (
+        <p
+          role="alert"
+          style={{
+            color: '#b00020',
+            marginBottom: '1rem',
+            fontSize: '0.875rem',
+          }}
+        >
+          {trackError}
+        </p>
+      )}
+
+      {/* ── Track editing toolbar ──────────────────────────────────────── */}
+      {editingTracks && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '0.5rem',
+            marginBottom: '1rem',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setShowAddForm((v) => !v)
+              setTrackError(null)
+            }}
+            style={{
+              padding: '0.375rem 0.75rem',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              borderRadius: '0.5rem',
+              border: 'none',
+              background: '#1a7f37',
+              color: '#fff',
+              cursor: 'pointer',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#157a31'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#1a7f37'
+            }}
+          >
+            {showAddForm ? 'Cancel' : '+ Add Track'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingTracks(false)
+              setShowAddForm(false)
+              setDeleteConfirm(false)
+              setTrackError(null)
+            }}
+            style={{
+              padding: '0.375rem 0.75rem',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              borderRadius: '0.5rem',
+              border: '1px solid var(--border, #d1d5db)',
+              background: 'transparent',
+              color: 'var(--muted, #6b7280)',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f3f4f6'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+            }}
+          >
+            Done
+          </button>
+        </div>
+      )}
+
+      {/* ── Add track form ─────────────────────────────────────────────── */}
+      {showAddForm && (
+        <div
+          style={{
+            background: 'var(--card-bg, #f9fafb)',
+            border: '1px solid var(--border, #e5e7eb)',
+            borderRadius: '0.75rem',
+            padding: '1.25rem',
+            marginBottom: '1.25rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.75rem',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 200px' }}>
+              <label htmlFor="track-title" style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8125rem', fontWeight: 500, color: '#374151' }}>Title</label>
+              <input
+                id="track-title"
+                type="text"
+                value={newTrackTitle}
+                onChange={(e) => setNewTrackTitle(e.target.value)}
+                placeholder="Track title"
+                maxLength={300}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.9375rem',
+                  border: '1px solid var(--border, #d1d5db)',
+                  borderRadius: '0.5rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ flex: '1 1 200px' }}>
+              <label htmlFor="track-artist" style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8125rem', fontWeight: 500, color: '#374151' }}>Artist</label>
+              <input
+                id="track-artist"
+                type="text"
+                value={newTrackArtist}
+                onChange={(e) => setNewTrackArtist(e.target.value)}
+                placeholder="Artist name"
+                maxLength={300}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.9375rem',
+                  border: '1px solid var(--border, #d1d5db)',
+                  borderRadius: '0.5rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ flex: '0 0 140px' }}>
+              <label htmlFor="track-duration" style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.8125rem', fontWeight: 500, color: '#374151' }}>Duration (s)</label>
+              <input
+                id="track-duration"
+                type="number"
+                value={newTrackDuration}
+                onChange={(e) => setNewTrackDuration(e.target.value)}
+                placeholder="Seconds"
+                min={1}
+                max={86400}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.9375rem',
+                  border: '1px solid var(--border, #d1d5db)',
+                  borderRadius: '0.5rem',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAddTrack}
+            disabled={
+              savingTracks ||
+              removingId !== null ||
+              !newTrackTitle.trim() ||
+              !newTrackArtist.trim() ||
+              !newTrackDuration.trim()
+            }
+            style={{
+              alignSelf: 'flex-start',
+              padding: '0.5rem 1.25rem',
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              borderRadius: '0.5rem',
+              border: 'none',
+              background:
+                savingTracks ||
+                !newTrackTitle.trim() ||
+                !newTrackArtist.trim() ||
+                !newTrackDuration.trim()
+                  ? 'var(--muted, #d1d5db)'
+                  : '#1a7f37',
+              color: '#fff',
+              cursor:
+                savingTracks ||
+                !newTrackTitle.trim() ||
+                !newTrackArtist.trim() ||
+                !newTrackDuration.trim()
+                  ? 'not-allowed'
+                  : 'pointer',
+              opacity:
+                savingTracks ||
+                !newTrackTitle.trim() ||
+                !newTrackArtist.trim() ||
+                !newTrackDuration.trim()
+                  ? 0.6
+                  : 1,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              if (
+                !savingTracks &&
+                newTrackTitle.trim() &&
+                newTrackArtist.trim() &&
+                newTrackDuration.trim()
+              )
+                e.currentTarget.style.background = '#157a31'
+            }}
+            onMouseLeave={(e) => {
+              if (
+                !savingTracks &&
+                newTrackTitle.trim() &&
+                newTrackArtist.trim() &&
+                newTrackDuration.trim()
+              )
+                e.currentTarget.style.background = '#1a7f37'
+            }}
+          >
+            {savingTracks ? 'Adding…' : 'Add Track'}
+          </button>
+        </div>
       )}
 
       {/* ── Edit form ──────────────────────────────────────────────────── */}
@@ -579,11 +982,28 @@ export default function PlaylistDetailPage() {
               >
                 Duration
               </th>
+              {editingTracks && (
+                <th
+                  style={{
+                    padding: '0.5rem 0.5rem',
+                    width: '2.5rem',
+                  }}
+                  aria-label="Remove"
+                />
+              )}
             </tr>
           </thead>
           <tbody>
             {playlist.tracks.map((track, i) => (
-              <TrackRow key={track.id} track={track} position={i + 1} />
+              <TrackRow
+                key={track.id}
+                track={track}
+                position={i + 1}
+                onRemove={handleRemoveTrack}
+                editing={editingTracks}
+                removing={removingId === track.id}
+                anyRemoving={removingId !== null || savingTracks}
+              />
             ))}
           </tbody>
         </table>

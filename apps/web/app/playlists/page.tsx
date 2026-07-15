@@ -2,7 +2,7 @@
 
 import type { PlaylistResponse } from '@universal-healthcare/shared'
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../../lib/auth-context'
 import { createPlaylist, deletePlaylist, listMyPlaylists } from '../../lib/playlist-client'
 
@@ -39,7 +39,7 @@ export default function PlaylistsPage() {
   }, [load])
 
   const handleCreate = useCallback(
-    async (e: React.FormEvent) => {
+    async (e: FormEvent) => {
       e.preventDefault()
       if (!token || !title.trim()) return
       setSubmitting(true)
