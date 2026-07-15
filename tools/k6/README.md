@@ -6,7 +6,7 @@ auth + fan endpoints.
 
 ## Prerequisites
 
-- [k6](https://k6.io/docs/getting-started/installation/) (`brew install k6`, `apt install k6`, etc.)
+- [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) (`brew install k6`, `apt install k6`, etc.)
 - The API reachable at `BASE_URL` with the seed users present.
 
 ## Seed the database
