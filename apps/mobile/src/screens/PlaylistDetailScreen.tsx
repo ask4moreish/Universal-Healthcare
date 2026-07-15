@@ -96,6 +96,11 @@ export default function PlaylistDetailScreen({ playlistId, onBack }: Props) {
   const [savingMeta, setSavingMeta] = useState(false)
   const [metaError, setMetaError] = useState<string | null>(null)
 
+  // Delete state
+  const [deleting, setDeleting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Track editing state
   const [editingTracks, setEditingTracks] = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -157,6 +162,23 @@ export default function PlaylistDetailScreen({ playlistId, onBack }: Props) {
     fetchPlaylist(false)
   }, [fetchPlaylist])
 
+  // ── Delete handler ─────────────────────────────────────────────────
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await actions.remove(playlistId)
+      onBack()
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : 'Failed to delete playlist'
+      )
+      setDeleting(false)
+      setDeleteConfirm(false)
+    }
+  }, [playlistId, actions, onBack])
+
   // ── Metadata editing handlers ───────────────────────────────────────
 
   const startEditingMeta = useCallback(() => {
@@ -164,6 +186,7 @@ export default function PlaylistDetailScreen({ playlistId, onBack }: Props) {
     setEditTitle(state.playlist.title)
     setEditIsPublic(state.playlist.isPublic)
     setMetaError(null)
+    setDeleteConfirm(false)
     setEditingTracks(false)
     setShowAddForm(false)
     setEditingMeta(true)
@@ -256,6 +279,7 @@ export default function PlaylistDetailScreen({ playlistId, onBack }: Props) {
   const startEditingTracks = useCallback(() => {
     setTrackError(null)
     setEditingMeta(false)
+    setDeleteConfirm(false)
     setShowAddForm(false)
     setEditingTracks(true)
   }, [])
@@ -293,10 +317,10 @@ export default function PlaylistDetailScreen({ playlistId, onBack }: Props) {
       <BackButton onPress={onBack} />
 
       {/* ── Inline error banner ────────────────────────────────────────── */}
-      {(refreshError || trackError || metaError) && (
+      {(refreshError || trackError || metaError || deleteError) && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>
-            {refreshError || trackError || metaError}
+            {refreshError || trackError || metaError || deleteError}
           </Text>
         </View>
       )}
@@ -433,6 +457,57 @@ export default function PlaylistDetailScreen({ playlistId, onBack }: Props) {
                 >
                   <Text style={styles.editTracksButtonText}>Edit Tracks</Text>
                 </Pressable>
+                {deleteConfirm ? (
+                  <>
+                    <Pressable
+                      onPress={handleDelete}
+                      disabled={deleting}
+                      style={({ pressed }) => [
+                        styles.deleteConfirmButton,
+                        deleting && styles.deleteButtonDisabled,
+                        pressed && !deleting && styles.deleteConfirmButtonPressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Confirm delete playlist"
+                    >
+                      {deleting ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.deleteConfirmButtonText}>
+                          Confirm
+                        </Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setDeleteConfirm(false)
+                        setDeleteError(null)
+                      }}
+                      disabled={deleting}
+                      style={({ pressed }) => [
+                        styles.deleteCancelButton,
+                        deleting && styles.deleteButtonDisabled,
+                        pressed && !deleting && styles.deleteCancelButtonPressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel delete"
+                    >
+                      <Text style={styles.deleteCancelButtonText}>Cancel</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable
+                    onPress={() => setDeleteConfirm(true)}
+                    style={({ pressed }) => [
+                      styles.deleteButton,
+                      pressed && styles.deleteButtonPressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete playlist"
+                  >
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -462,6 +537,7 @@ export default function PlaylistDetailScreen({ playlistId, onBack }: Props) {
                 onPress={() => {
                   setEditingTracks(false)
                   setShowAddForm(false)
+                  setDeleteConfirm(false)
                   setTrackError(null)
                 }}
                 style={({ pressed }) => [
@@ -791,6 +867,56 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
 
+  // Delete button
+  deleteButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  deleteButtonPressed: {
+    backgroundColor: '#fef2f2',
+  },
+  deleteButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#b00020',
+  },
+  deleteButtonDisabled: {
+    opacity: 0.5,
+  },
+  deleteConfirmButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#b00020',
+    minWidth: 48,
+    alignItems: 'center',
+  },
+  deleteConfirmButtonPressed: {
+    backgroundColor: '#8b0015',
+  },
+  deleteConfirmButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  deleteCancelButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  deleteCancelButtonPressed: {
+    backgroundColor: '#f3f4f6',
+  },
+  deleteCancelButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
 
   // Edit tracks
   editTracksButton: {
