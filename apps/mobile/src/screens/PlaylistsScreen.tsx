@@ -10,7 +10,11 @@ import {
 } from 'react-native'
 import { usePlaylistActions, usePlaylists } from '../hooks/usePlaylists'
 
-export default function PlaylistsScreen() {
+interface Props {
+  onSelectPlaylist: (id: string) => void
+}
+
+export default function PlaylistsScreen({ onSelectPlaylist }: Props) {
   const { data, loading, error, refresh } = usePlaylists()
   const actions = usePlaylistActions()
 
@@ -60,7 +64,15 @@ export default function PlaylistsScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: typeof data[number] }) => (
-      <View style={styles.card}>
+      <Pressable
+        style={({ pressed }) => [
+          styles.card,
+          pressed && styles.cardPressed,
+        ]}
+        onPress={() => onSelectPlaylist(item.id)}
+        accessibilityRole="button"
+        accessibilityLabel={`View playlist ${item.title}`}
+      >
         <View style={styles.cardBody}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle} numberOfLines={1}>
@@ -107,9 +119,9 @@ export default function PlaylistsScreen() {
         >
           <Text style={styles.deleteButtonText}>Delete</Text>
         </Pressable>
-      </View>
+      </Pressable>
     ),
-    [handleDelete, deleteErrors]
+    [handleDelete, deleteErrors, onSelectPlaylist]
   )
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -363,6 +375,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
+  },
+  cardPressed: {
+    opacity: 0.6,
   },
   cardBody: {
     flex: 1,

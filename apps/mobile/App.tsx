@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { AuthProvider, useAuth } from './src/hooks/useAuth'
 import LoginScreen from './src/screens/LoginScreen'
+import PlaylistDetailScreen from './src/screens/PlaylistDetailScreen'
 import PlaylistsScreen from './src/screens/PlaylistsScreen'
 import RegisterScreen from './src/screens/RegisterScreen'
 
@@ -39,11 +40,26 @@ function AuthNavigator() {
   )
 }
 
-type AppRoute = 'home' | 'playlists'
+type AppRoute = 'home' | 'playlists' | 'playlist-detail'
 
 function HomeScreen() {
   const { user, logout } = useAuth()
   const [route, setRoute] = useState<AppRoute>('home')
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(null)
+
+  const handleSelectPlaylist = useCallback((id: string) => {
+    setSelectedPlaylistId(id)
+    setRoute('playlist-detail')
+  }, [])
+
+  if (route === 'playlist-detail' && selectedPlaylistId) {
+    return (
+      <PlaylistDetailScreen
+        playlistId={selectedPlaylistId}
+        onBack={() => setRoute('playlists')}
+      />
+    )
+  }
 
   if (route === 'playlists') {
     return (
@@ -59,7 +75,7 @@ function HomeScreen() {
         >
           <Text style={styles.backButtonText}>← Back</Text>
         </Pressable>
-        <PlaylistsScreen />
+        <PlaylistsScreen onSelectPlaylist={handleSelectPlaylist} />
       </View>
     )
   }
