@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { AuthProvider, useAuth } from './src/hooks/useAuth'
 import LoginScreen from './src/screens/LoginScreen'
+import PlaylistsScreen from './src/screens/PlaylistsScreen'
 import RegisterScreen from './src/screens/RegisterScreen'
 
 type AuthScreen = 'login' | 'register'
@@ -38,8 +39,30 @@ function AuthNavigator() {
   )
 }
 
+type AppRoute = 'home' | 'playlists'
+
 function HomeScreen() {
   const { user, logout } = useAuth()
+  const [route, setRoute] = useState<AppRoute>('home')
+
+  if (route === 'playlists') {
+    return (
+      <View style={styles.screenContainer}>
+        <Pressable
+          onPress={() => setRoute('home')}
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.backButtonPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Go back to home"
+        >
+          <Text style={styles.backButtonText}>← Back</Text>
+        </Pressable>
+        <PlaylistsScreen />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.homeContainer}>
@@ -47,6 +70,14 @@ function HomeScreen() {
       <Text style={styles.welcomeRole}>
         Role: {user?.role ?? 'unknown'}
       </Text>
+      <Pressable
+        style={styles.navButton}
+        onPress={() => setRoute('playlists')}
+        accessibilityRole="button"
+        accessibilityLabel="View my playlists"
+      >
+        <Text style={styles.navButtonText}>My Playlists</Text>
+      </Pressable>
       <Pressable
         style={styles.logoutButton}
         onPress={logout}
@@ -135,6 +166,38 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  navButton: {
+    backgroundColor: '#1a7f37',
+    borderRadius: 8,
+    padding: 12,
+    paddingHorizontal: 24,
+    marginBottom: 16,
+    width: '100%',
+    maxWidth: 280,
+  },
+  navButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  screenContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  backButtonPressed: {
+    opacity: 0.6,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#1976d2',
+    fontWeight: '500',
   },
   splashContainer: {
     flex: 1,
