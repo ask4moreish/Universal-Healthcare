@@ -1,6 +1,7 @@
 'use client'
 
 import type { PlaylistResponse } from '@universal-healthcare/shared'
+import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../lib/auth-context'
 import { createPlaylist, deletePlaylist, listMyPlaylists } from '../../lib/playlist-client'
@@ -322,17 +323,27 @@ export default function PlaylistsPage() {
                   marginBottom: '0.25rem',
                 }}
               >
-                <span
+                <Link
+                  href={`/playlists/${pl.id}`}
                   style={{
                     fontWeight: 600,
                     fontSize: '1.0625rem',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    color: '#111',
+                    textDecoration: 'none',
+                    transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLAnchorElement).style.color = '#2563eb'
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLAnchorElement).style.color = '#111'
                   }}
                 >
                   {pl.title}
-                </span>
+                </Link>
                 <span
                   style={{
                     fontSize: '0.6875rem',
